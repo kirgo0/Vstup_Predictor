@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36408.4 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vstup_Predictor", "Vstup_Predictor\Vstup_Predictor\Vstup_Predictor.csproj", "{3F673267-968A-4465-838F-8A444BA2DE0E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vstup_Predictor.Client", "Vstup_Predictor\Vstup_Predictor.Client\Vstup_Predictor.Client.csproj", "{2984019F-FF0E-4D36-82FE-FF1BB71A5D11}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3F673267-968A-4465-838F-8A444BA2DE0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F673267-968A-4465-838F-8A444BA2DE0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F673267-968A-4465-838F-8A444BA2DE0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F673267-968A-4465-838F-8A444BA2DE0E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2984019F-FF0E-4D36-82FE-FF1BB71A5D11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2984019F-FF0E-4D36-82FE-FF1BB71A5D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2984019F-FF0E-4D36-82FE-FF1BB71A5D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2984019F-FF0E-4D36-82FE-FF1BB71A5D11}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {80437B59-5A9B-4470-AA24-31555C2F3B8A}
+	EndGlobalSection
+EndGlobal
