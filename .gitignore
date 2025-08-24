@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Vstup_Predictor/Vstup_Predictor/.env
+/Vstup_Predictor/Vstup_Predictor/proxies.txt

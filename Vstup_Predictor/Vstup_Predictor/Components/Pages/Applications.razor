@@ -1,0 +1,178 @@
+﻿@page "/applications"
+@using Microsoft.EntityFrameworkCore
+@using Vstup_Predictor.Models
+@inject ApplicationDbContext DbContext
+@rendermode InteractiveServer
+
+<PageTitle>Applications</PageTitle>
+
+<h1>Applications</h1>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Search person..." @bind="searchTerm" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Min Grade" @bind="minGrade" />
+    </div>
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Max Grade" @bind="maxGrade" />
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="filterState">
+            <option value="">All States</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Pending">Pending</option>
+            <option value="Rejected">Rejected</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="sortField">
+            <option value="Grade">Grade</option>
+            <option value="Person">Person</option>
+            <option value="Priority">Priority</option>
+        </select>
+    </div>
+    <div class="col-md-1">
+        <select class="form-select" @bind="sortDirection">
+            <option value="Desc">Desc</option>
+            <option value="Asc">Asc</option>
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (applications == null || !applications.Any())
+{
+    <p><em>No applications found.</em></p>
+}
+else
+{
+    <div class="mb-3">
+        <strong>Total Applications: @GetFilteredApplications().Count()</strong> |
+        <strong>Average Grade: @GetAverageFilteredGrade()</strong>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Person</th>
+                    <th>University</th>
+                    <th>Speciality</th>
+                    <th>Grade</th>
+                    <th>Priority</th>
+                    <th>State</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var app in GetFilteredAndSortedApplications().Take(100))
+                {
+                    <tr>
+                        <td>@app.Person.FullName</td>
+                        <td>@GetUniversityName(app.Offer.UniversityId)</td>
+                        <td>@app.Offer.Speciality</td>
+                        <td>@app.Grade?.ToString("F2")</td>
+                        <td>@(app.Priority?.ToString() ?? "-")</td>
+                        <td>
+                            <span class="badge @GetStateBadgeClass(app.State)">
+                                @(string.IsNullOrEmpty(app.State) ? "Unknown" : app.State)
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (GetFilteredApplications().Count() > 100)
+    {
+        <div class="alert alert-info">
+            Showing first 100 results. Total: @GetFilteredApplications().Count()
+        </div>
+    }
+}
+
+@code {
+    private List<Application>? applications;
+    private List<University>? universities;
+    private string searchTerm = "";
+    private double? minGrade;
+    private double? maxGrade;
+    private string filterState = "";
+    private string sortField = "Grade";
+    private string sortDirection = "Desc";
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        universities = await DbContext.Universities.ToListAsync();
+        applications = await DbContext.Applications
+            .Include(a => a.Person)
+            .Include(a => a.Offer)
+            .ToListAsync();
+        loading = false;
+    }
+
+    private IEnumerable<Application> GetFilteredApplications()
+    {
+        if (applications == null) return Enumerable.Empty<Application>();
+
+        return applications.Where(a =>
+            (string.IsNullOrWhiteSpace(searchTerm) ||
+             a.Person.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (!minGrade.HasValue || a.Grade >= minGrade.Value) &&
+            (!maxGrade.HasValue || a.Grade <= maxGrade.Value) &&
+            (string.IsNullOrWhiteSpace(filterState) || a.State == filterState));
+    }
+
+    private IEnumerable<Application> GetFilteredAndSortedApplications()
+    {
+        var filtered = GetFilteredApplications();
+
+        return sortField switch
+        {
+            "Person" => sortDirection == "Asc"
+                ? filtered.OrderBy(a => a.Person.FullName)
+                : filtered.OrderByDescending(a => a.Person.FullName),
+            "Priority" => sortDirection == "Asc"
+                ? filtered.OrderBy(a => a.Priority ?? int.MaxValue)
+                : filtered.OrderByDescending(a => a.Priority ?? 0),
+            _ => sortDirection == "Asc"
+                ? filtered.OrderBy(a => a.Grade)
+                : filtered.OrderByDescending(a => a.Grade)
+        };
+    }
+
+    private string GetUniversityName(string universityId)
+    {
+        return universities?.FirstOrDefault(u => u.Id == universityId)?.Name ?? "Unknown";
+    }
+
+    private string GetAverageFilteredGrade()
+    {
+        var filtered = GetFilteredApplications();
+        if (!filtered.Any()) return "N/A";
+        return filtered.Average(a => a.Grade)?.ToString("F2");
+    }
+
+    private string GetStateBadgeClass(string? state)
+    {
+        return state switch
+        {
+            "Accepted" => "bg-success",
+            "Rejected" => "bg-danger",
+            "Pending" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+}

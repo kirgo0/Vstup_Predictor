@@ -1,0 +1,180 @@
+﻿@page "/universities"
+@using Microsoft.EntityFrameworkCore
+@using Vstup_Predictor.Models
+@inject ApplicationDbContext DbContext
+@rendermode InteractiveServer
+
+<PageTitle>Universities</PageTitle>
+
+<h1>Universities</h1>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Search universities..." @bind="searchTerm" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="selectedCityId">
+            <option value="">All Cities</option>
+            @if (cities != null)
+            {
+                @foreach (var city in cities)
+                {
+                    <option value="@city.Id">@city.Name</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="sortField">
+            <option value="Name">Name</option>
+            <option value="City">City</option>
+            <option value="OfferCount">Offer Count</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="sortDirection">
+            <option value="Asc">Asc</option>
+            <option value="Desc">Desc</option>
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (universities == null || !universities.Any())
+{
+    <p><em>No universities found.</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>City</th>
+                <th>Offers Count</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var uni in GetFilteredAndSortedUniversities())
+            {
+                <tr>
+                    <td>@uni.Name</td>
+                    <td>@GetCityName(uni.CityId)</td>
+                    <td>@uni.Offers.Count()</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => ShowOffers(uni)">
+                            View Offers
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (selectedUniversity != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Offers at @selectedUniversity.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseOffers"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Speciality</th>
+                                <th>Program</th>
+                                <th>Budget Count</th>
+                                <th>Applications</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var offer in selectedUniversity.Offers)
+                            {
+                                <tr>
+                                    <td>@offer.Speciality</td>
+                                    <td>@offer.Program</td>
+                                    <td>@offer.BudgetCount</td>
+                                    <td>@offer.Applications.Count()</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private List<University>? universities;
+    private List<City>? cities;
+    private University? selectedUniversity;
+    private string searchTerm = "";
+    private string selectedCityId = "";
+    private string sortField = "Name";
+    private string sortDirection = "Asc";
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        cities = await DbContext.Cities.ToListAsync();
+        universities = await DbContext.Universities
+            .Include(u => u.Offers)
+                .ThenInclude(o => o.Applications)
+            .ToListAsync();
+        loading = false;
+    }
+
+    private IEnumerable<University> GetFilteredAndSortedUniversities()
+    {
+        if (universities == null) return Enumerable.Empty<University>();
+
+        var filtered = universities.Where(u =>
+            (string.IsNullOrWhiteSpace(searchTerm) ||
+             u.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(selectedCityId) || u.CityId == selectedCityId));
+
+        return sortField switch
+        {
+            "City" => sortDirection == "Asc"
+                ? filtered.OrderBy(u => GetCityName(u.CityId))
+                : filtered.OrderByDescending(u => GetCityName(u.CityId)),
+            "OfferCount" => sortDirection == "Asc"
+                ? filtered.OrderBy(u => u.Offers.Count())
+                : filtered.OrderByDescending(u => u.Offers.Count()),
+            _ => sortDirection == "Asc"
+                ? filtered.OrderBy(u => u.Name)
+                : filtered.OrderByDescending(u => u.Name)
+        };
+    }
+
+    private string GetCityName(string cityId)
+    {
+        return cities?.FirstOrDefault(c => c.Id == cityId)?.Name ?? "Unknown";
+    }
+
+    private void ShowOffers(University uni)
+    {
+        selectedUniversity = uni;
+    }
+
+    private void CloseOffers()
+    {
+        selectedUniversity = null;
+    }
+}

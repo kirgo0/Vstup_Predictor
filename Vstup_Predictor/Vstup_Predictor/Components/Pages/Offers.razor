@@ -1,0 +1,210 @@
+﻿@page "/offers"
+@using Microsoft.EntityFrameworkCore
+@using Vstup_Predictor.Models
+@inject ApplicationDbContext DbContext
+@rendermode InteractiveServer
+
+<PageTitle>Offers</PageTitle>
+
+<h1>Offers</h1>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Search speciality..." @bind="searchTerm" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="selectedUniversityId">
+            <option value="">All Universities</option>
+            @if (universities != null)
+            {
+                @foreach (var uni in universities)
+                {
+                    <option value="@uni.Id">@uni.Name</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Min Budget" @bind="minBudget" />
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="sortField">
+            <option value="Speciality">Speciality</option>
+            <option value="University">University</option>
+            <option value="BudgetCount">Budget</option>
+            <option value="ApplicationCount">Applications</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="sortDirection">
+            <option value="Asc">Asc</option>
+            <option value="Desc">Desc</option>
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (offers == null || !offers.Any())
+{
+    <p><em>No offers found.</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Speciality</th>
+                    <th>University</th>
+                    <th>Program</th>
+                    <th>Budget Count</th>
+                    <th>Applications</th>
+                    <th>Avg Grade</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var offer in GetFilteredAndSortedOffers())
+                {
+                    <tr>
+                        <td>@offer.Speciality</td>
+                        <td>@GetUniversityName(offer.UniversityId)</td>
+                        <td>@(string.IsNullOrEmpty(offer.Program) ? "-" : offer.Program)</td>
+                        <td>@offer.BudgetCount</td>
+                        <td>@offer.Applications.Count()</td>
+                        <td>@GetAverageGrade(offer)</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" @onclick="() => ShowApplications(offer)">
+                                Applications
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (selectedOffer != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Applications for @selectedOffer.Speciality</h5>
+                    <button type="button" class="btn-close" @onclick="CloseApplications"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Person</th>
+                                <th>Grade</th>
+                                <th>Priority</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                int rank = 1;
+                            }
+                            @foreach (var app in selectedOffer.Applications.OrderByDescending(a => a.Grade))
+                            {
+                                <tr class="@(rank <= selectedOffer.BudgetCount ? "table-success" : "")">
+                                    <td>@rank</td>
+                                    <td>@app.Person.FullName</td>
+                                    <td>@app.Grade?.ToString("F2")</td>
+                                    <td>@(app.Priority?.ToString() ?? "-")</td>
+                                    <td>@(string.IsNullOrEmpty(app.State) ? "-" : app.State)</td>
+                                </tr>
+                                rank++;
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private List<Offer>? offers;
+    private List<University>? universities;
+    private Offer? selectedOffer;
+    private string searchTerm = "";
+    private string selectedUniversityId = "";
+    private int? minBudget;
+    private string sortField = "Speciality";
+    private string sortDirection = "Asc";
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        universities = await DbContext.Universities.ToListAsync();
+        offers = await DbContext.Offers
+            .Include(o => o.Applications)
+                .ThenInclude(a => a.Person)
+            .ToListAsync();
+        loading = false;
+    }
+
+    private IEnumerable<Offer> GetFilteredAndSortedOffers()
+    {
+        if (offers == null) return Enumerable.Empty<Offer>();
+
+        var filtered = offers.Where(o =>
+            (string.IsNullOrWhiteSpace(searchTerm) ||
+             o.Speciality.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(selectedUniversityId) || o.UniversityId == selectedUniversityId) &&
+            (!minBudget.HasValue || o.BudgetCount >= minBudget.Value));
+
+        return sortField switch
+        {
+            "University" => sortDirection == "Asc"
+                ? filtered.OrderBy(o => GetUniversityName(o.UniversityId))
+                : filtered.OrderByDescending(o => GetUniversityName(o.UniversityId)),
+            "BudgetCount" => sortDirection == "Asc"
+                ? filtered.OrderBy(o => o.BudgetCount)
+                : filtered.OrderByDescending(o => o.BudgetCount),
+            "ApplicationCount" => sortDirection == "Asc"
+                ? filtered.OrderBy(o => o.Applications.Count())
+                : filtered.OrderByDescending(o => o.Applications.Count()),
+            _ => sortDirection == "Asc"
+                ? filtered.OrderBy(o => o.Speciality)
+                : filtered.OrderByDescending(o => o.Speciality)
+        };
+    }
+
+    private string GetUniversityName(string universityId)
+    {
+        return universities?.FirstOrDefault(u => u.Id == universityId)?.Name ?? "Unknown";
+    }
+
+    private string GetAverageGrade(Offer offer)
+    {
+        if (!offer.Applications.Any()) return "-";
+        var avg = offer.Applications.Average(a => a.Grade);
+        return avg?.ToString("F2");
+    }
+
+    private void ShowApplications(Offer offer)
+    {
+        selectedOffer = offer;
+    }
+
+    private void CloseApplications()
+    {
+        selectedOffer = null;
+    }
+}

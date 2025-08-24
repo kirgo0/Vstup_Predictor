@@ -1,0 +1,137 @@
+﻿@page "/cities"
+@using Microsoft.EntityFrameworkCore
+@using Vstup_Predictor.Models
+@inject ApplicationDbContext DbContext
+@rendermode InteractiveServer
+
+<PageTitle>Cities</PageTitle>
+
+<h1>Cities</h1>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <input class="form-control" placeholder="Search cities..." @bind="searchTerm" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="sortField">
+            <option value="Name">Name</option>
+            <option value="UniversityCount">University Count</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="sortDirection">
+            <option value="Asc">Ascending</option>
+            <option value="Desc">Descending</option>
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (cities == null || !cities.Any())
+{
+    <p><em>No cities found.</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Universities Count</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var city in GetFilteredAndSortedCities())
+            {
+                <tr>
+                    <td>@city.Name</td>
+                    <td>@city.Universities.Count()</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => ShowDetails(city)">
+                            View Universities
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (selectedCity != null)
+{
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Universities in @selectedCity.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="list-group">
+                        @foreach (var uni in selectedCity.Universities)
+                        {
+                            <li class="list-group-item">@uni.Name</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+}
+
+@code {
+    private List<City>? cities;
+    private City? selectedCity;
+    private string searchTerm = "";
+    private string sortField = "Name";
+    private string sortDirection = "Asc";
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        cities = await DbContext.Cities
+            .Include(c => c.Universities)
+            .ToListAsync();
+        loading = false;
+    }
+
+    private IEnumerable<City> GetFilteredAndSortedCities()
+    {
+        if (cities == null) return Enumerable.Empty<City>();
+
+        var filtered = cities.Where(c =>
+            string.IsNullOrWhiteSpace(searchTerm) ||
+            c.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+
+        return sortField switch
+        {
+            "UniversityCount" => sortDirection == "Asc"
+                ? filtered.OrderBy(c => c.Universities.Count())
+                : filtered.OrderByDescending(c => c.Universities.Count()),
+            _ => sortDirection == "Asc"
+                ? filtered.OrderBy(c => c.Name)
+                : filtered.OrderByDescending(c => c.Name)
+        };
+    }
+
+    private void ShowDetails(City city)
+    {
+        selectedCity = city;
+    }
+
+    private void CloseDetails()
+    {
+        selectedCity = null;
+    }
+}

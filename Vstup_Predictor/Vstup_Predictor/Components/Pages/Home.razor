@@ -1,7 +1,578 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@inject VstupParserService Parser
+@implements IDisposable
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Vstup Parser</PageTitle>
 
-<h1>Hello, world!</h1>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
 
-Welcome to your new app.
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .header {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+        color: #333;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .parse-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .parse-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .parse-button.parsing {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .parse-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    @@media (max-width: 1024px) {
+        .main-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .progress-section, .requests-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        color: #333;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+    }
+
+    .overall-progress {
+        margin-bottom: 2rem;
+    }
+
+    .progress-percentage {
+        font-size: 3rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .current-stage {
+        text-align: center;
+        color: #666;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .progress-bar-container {
+        width: 100%;
+        height: 24px;
+        background: #f0f0f0;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        transition: width 0.5s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent
+        );
+        animation: shimmer 2s infinite;
+    }
+
+    @@keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    .stage-progress {
+        margin-bottom: 1.5rem;
+    }
+
+    .stage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .stage-name {
+        font-weight: 500;
+        color: #555;
+    }
+
+    .stage-count {
+        font-size: 0.875rem;
+        color: #888;
+    }
+
+    .stage-bar-container {
+        width: 100%;
+        height: 8px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .stage-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .stage-bar.cities { background: #4CAF50; }
+    .stage-bar.universities { background: #2196F3; }
+    .stage-bar.offers { background: #FF9800; }
+    .stage-bar.applications { background: #9C27B0; }
+
+    .requests-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .clear-logs {
+        background: #f0f0f0;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .clear-logs:hover {
+        background: #e0e0e0;
+    }
+
+    .requests-container {
+        max-height: 600px;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.5rem;
+    }
+
+    .request-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #f0f0f0;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 1rem;
+        align-items: center;
+        animation: slideIn 0.3s ease;
+    }
+
+    @@keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .request-item:last-child {
+        border-bottom: none;
+    }
+
+    .request-status {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-success {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .status-pending {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .status-failed {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .status-timeout {
+        background: #fce4ec;
+        color: #880e4f;
+    }
+
+    .status-cancelled {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .request-details {
+        overflow: hidden;
+    }
+
+    .request-url {
+        font-size: 0.875rem;
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 2px;
+    }
+
+    .request-type {
+        font-size: 0.75rem;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .request-meta {
+        text-align: right;
+        font-size: 0.75rem;
+        color: #888;
+    }
+
+    .request-duration {
+        font-weight: 600;
+        color: #555;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #999;
+    }
+
+    .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+<div class="container">
+    <div class="header">
+        <h1>🎓 Vstup Data Parser</h1>
+        <button class="parse-button @(_isParsing ? "parsing" : "")" @onclick="Parse" disabled="@_isInitializing">
+            @if (_isInitializing)
+            {
+                <span class="spinner"></span>
+                <span>Initializing...</span>
+            }
+            else if (_isParsing)
+            {
+                <span class="spinner"></span>
+                <span>Stop Parsing</span>
+            }
+            else
+            {
+                <span>▶</span>
+                <span>Start Parsing</span>
+            }
+        </button>
+    </div>
+
+    <div class="main-grid">
+        <div class="progress-section">
+            <h2 class="section-title">📊 Parsing Progress</h2>
+
+            <div class="overall-progress">
+                <div class="progress-percentage">@(_progress?.OverallPercentage.ToString("F1") ?? "0")%</div>
+                <div class="current-stage">@(_progress?.CurrentStage ?? "Not started")</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: @(_progress?.OverallPercentage ?? 0)%"></div>
+                </div>
+            </div>
+
+            <div class="stage-progress">
+                <div class="stage-header">
+                    <span class="stage-name">🏙️ Cities</span>
+                    <span class="stage-count">@(_progress?.ParsedCities ?? 0) / @(_progress?.TotalCities ?? 0)</span>
+                </div>
+                <div class="stage-bar-container">
+                    <div class="stage-bar cities" style="width: @GetStagePercentage("cities")%"></div>
+                </div>
+            </div>
+
+            <div class="stage-progress">
+                <div class="stage-header">
+                    <span class="stage-name">🏫 Universities</span>
+                    <span class="stage-count">@(_progress?.ParsedUniversities ?? 0) / @(_progress?.TotalUniversities ?? 0)</span>
+                </div>
+                <div class="stage-bar-container">
+                    <div class="stage-bar universities" style="width: @GetStagePercentage("universities")%"></div>
+                </div>
+            </div>
+
+            <div class="stage-progress">
+                <div class="stage-header">
+                    <span class="stage-name">📚 Offers</span>
+                    <span class="stage-count">@(_progress?.ParsedOffers ?? 0) / @(_progress?.TotalOffers ?? 0)</span>
+                </div>
+                <div class="stage-bar-container">
+                    <div class="stage-bar offers" style="width: @GetStagePercentage("offers")%"></div>
+                </div>
+            </div>
+
+            <div class="stage-progress">
+                <div class="stage-header">
+                    <span class="stage-name">📝 Applications</span>
+                    <span class="stage-count">@(_progress?.ParsedApplications ?? 0) / @(_progress?.TotalApplications ?? 0)</span>
+                </div>
+                <div class="stage-bar-container">
+                    <div class="stage-bar applications" style="width: @GetStagePercentage("applications")%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="requests-section">
+            <div class="requests-header">
+                <h2 class="section-title">🌐 Request Logs</h2>
+                <button class="clear-logs" @onclick="ClearLogs">Clear Logs</button>
+            </div>
+
+            @if (_requestLogs.Any())
+            {
+                <div class="requests-container">
+                    @foreach (var log in _requestLogs.TakeLast(100).Reverse())
+                    {
+                        <div class="request-item">
+                            <span class="request-status status-@log.Status.ToLower()">
+                                @log.Status
+                            </span>
+                            <div class="request-details">
+                                <div class="request-url" title="@log.Url">@TruncateUrl(log.Url)</div>
+                                <div class="request-type">@log.Type</div>
+                                @if (!string.IsNullOrEmpty(log.Error))
+                                {
+                                    <div style="color: #c62828; font-size: 0.75rem; margin-top: 2px;">@log.Error</div>
+                                }
+                            </div>
+                            <div class="request-meta">
+                                <div class="request-duration">@FormatDuration(log.Duration)</div>
+                                <div>@log.Timestamp.ToString("HH:mm:ss")</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    No requests logged yet. Start parsing to see requests.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _isParsing = false;
+    private bool _isInitializing = false;
+    private CancellationTokenSource? _cts;
+    private ProgressUpdate? _progress;
+    private List<RequestLog> _requestLogs = new();
+
+    protected override void OnInitialized()
+    {
+        Parser.OnProgressUpdate += OnProgressUpdate;
+        Parser.OnRequestLog += OnRequestLog;
+    }
+
+    private async Task Parse()
+    {
+        if (_isParsing)
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+            _isParsing = false;
+        }
+        else
+        {
+            _isParsing = true;
+            _isInitializing = true;
+            _cts = new CancellationTokenSource();
+
+            try
+            {
+                await InvokeAsync(StateHasChanged);
+                _isInitializing = false;
+                await InvokeAsync(StateHasChanged);
+
+                await Parser.ParseAsync(_cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // User cancelled the operation
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Parsing error: {ex.Message}");
+            }
+            finally
+            {
+                _isParsing = false;
+                _isInitializing = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private void OnProgressUpdate(ProgressUpdate progress)
+    {
+        _progress = progress;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRequestLog(RequestLog log)
+    {
+        _requestLogs.Add(log);
+
+        // Keep only last 500 logs to prevent memory issues
+        if (_requestLogs.Count > 500)
+        {
+            _requestLogs.RemoveAt(0);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ClearLogs()
+    {
+        _requestLogs.Clear();
+    }
+
+    private double GetStagePercentage(string stage)
+    {
+        if (_progress == null) return 0;
+
+        return stage switch
+        {
+            "cities" => _progress.TotalCities > 0
+                ? (_progress.ParsedCities * 100.0 / _progress.TotalCities) : 0,
+            "universities" => _progress.TotalUniversities > 0
+                ? (_progress.ParsedUniversities * 100.0 / _progress.TotalUniversities) : 0,
+            "offers" => _progress.TotalOffers > 0
+                ? (_progress.ParsedOffers * 100.0 / _progress.TotalOffers) : 0,
+            "applications" => _progress.TotalApplications > 0
+                ? (_progress.ParsedApplications * 100.0 / _progress.TotalApplications) : 0,
+            _ => 0
+        };
+    }
+
+    private string TruncateUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "";
+
+        // Remove the base URL for display
+        url = url.Replace("https://", "").Replace("http://", "");
+
+        // Truncate if too long
+        if (url.Length > 60)
+        {
+            return url.Substring(0, 57) + "...";
+        }
+
+        return url;
+    }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalSeconds < 1)
+            return $"{duration.TotalMilliseconds:F0}ms";
+        else if (duration.TotalMinutes < 1)
+            return $"{duration.TotalSeconds:F1}s";
+        else
+            return $"{duration.TotalMinutes:F1}m";
+    }
+
+    public void Dispose()
+    {
+        Parser.OnProgressUpdate -= OnProgressUpdate;
+        Parser.OnRequestLog -= OnRequestLog;
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

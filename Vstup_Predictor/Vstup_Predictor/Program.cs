@@ -1,7 +1,7 @@
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
-using Vstup_Predictor.Client.Pages;
 using Vstup_Predictor.Components;
+using Vstup_Predictor.Extensions;
 using Vstup_Predictor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +11,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
 
+Env.Load();
+
 var connectionString = Env.GetString("MYSQL_CONNECTION_STRING") ?? throw new InvalidOperationException("Database conncetion string is not set in environment variables.");
 
 // Add Database Context
@@ -19,6 +21,16 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         connectionString,
         MySqlServerVersion.AutoDetect(connectionString)
     ));
+
+// Http client and parser
+builder.Services.AddSingleton(sp =>
+{
+    var env = sp.GetRequiredService<IWebHostEnvironment>();
+    var proxyPath = Path.Combine(env.ContentRootPath, "proxies.txt");
+    return new ProxyHttpClientFactory(proxyPath);
+});
+builder.Services.AddTransient<CustomHttpLoggingHandler>();
+builder.Services.AddScoped<VstupParserService>();
 
 var app = builder.Build();
 
